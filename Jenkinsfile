@@ -1,34 +1,48 @@
-node {
-    def app
+pipeline {
+    agent any
 
-    stage('Clone repository') {
-      
+    stages {
+        stage('Clone repository') {
+            steps {
+                checkout scm
+            }
+        }
 
-        checkout scm
-    }
+        stage('Build image') {
+            steps {
+                script {
+                    app = docker.build("dvsr1411/test")
+                }
+            }
+        }
 
-    stage('Build image') {
-  
-       app = docker.build("dvsr1411/test")
-    }
+        stage('Test image') {
+            steps {
+                script {
+                    app.inside {
+                        sh 'echo "Tests passed"'
+                    }
+                }
+            }
+        }
 
-    stage('Test image') {
-  
+        stage('Push image') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
+                        app.push("${env.BUILD_NUMBER}")
+                    }
+                }
+            }
+        }
 
-        app.inside {
-            sh 'echo "Tests passed"'
+        stage('Trigger ManifestUpdate') {
+            steps {
+                script {
+                    echo "triggering updatemanifestjob"
+                    build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: env.BUILD_NUMBER)]
+                }
+            }
         }
     }
-
-    stage('Push image') {
-        
-        docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
-            app.push("${env.BUILD_NUMBER}")
-        }
-    }
-    
-    stage('Trigger ManifestUpdate') {
-                echo "triggering updatemanifestjob"
-                build job: 'updatemanifest', parameters: [string(name: 'DOCKERTAG', value: env.BUILD_NUMBER)]
-        }
 }
